@@ -437,3 +437,99 @@ print(cnn_confusion_matrix)
 
 # Saves the Day 6 product image classifier.
 cnn.save("models/catalog_cnn.keras")
+
+
+###DAY 7
+
+# Imports the Day 7 tools for transfer learning and object detection.
+from tensorflow.keras.applications import MobileNetV2
+from tensorflow.keras.layers import GlobalAveragePooling2D
+from tensorflow.keras.models import Model
+from ultralytics import YOLO
+
+# Creates a pretrained MobileNetV2 model without its original output layer.
+base_model = MobileNetV2(
+    weights="imagenet",
+    include_top=False,
+    input_shape=(96, 96, 3)
+)
+
+# Freezes the pretrained layers for transfer learning.
+base_model.trainable = False
+
+# Adds a new classification head for the 10 product categories.
+x = GlobalAveragePooling2D()(base_model.output)
+output = Dense(10, activation="softmax")(x)
+
+transfer_model = Model(
+    inputs=base_model.input,
+    outputs=output
+)
+
+# Compiles the transfer learning model.
+transfer_model.compile(
+    optimizer="adam",
+    loss="sparse_categorical_crossentropy",
+    metrics=["accuracy"]
+)
+
+# Resizes Fashion-MNIST images and converts them to three channels.
+X_train_transfer = tf.image.resize(X_train_cnn, (96, 96))
+X_test_transfer = tf.image.resize(X_test_cnn, (96, 96))
+
+X_train_transfer = tf.image.grayscale_to_rgb(X_train_transfer)
+X_test_transfer = tf.image.grayscale_to_rgb(X_test_transfer)
+
+# Trains the new classification head while keeping the base model frozen.
+transfer_model.fit(
+    X_train_transfer,
+    y_train_cnn,
+    epochs=5,
+    batch_size=32,
+    validation_split=0.2,
+    verbose=1
+)
+
+# Fine-tunes the top layers of the pretrained model.
+base_model.trainable = True
+
+for layer in base_model.layers[:-20]:
+    layer.trainable = False
+
+transfer_model.compile(
+    optimizer=tf.keras.optimizers.Adam(learning_rate=0.0001),
+    loss="sparse_categorical_crossentropy",
+    metrics=["accuracy"]
+)
+
+transfer_model.fit(
+    X_train_transfer,
+    y_train_cnn,
+    epochs=3,
+    batch_size=32,
+    validation_split=0.2,
+    verbose=1
+)
+
+# Evaluates transfer learning accuracy against the Day 6 CNN.
+transfer_loss, transfer_accuracy = transfer_model.evaluate(
+    X_test_transfer,
+    y_test_cnn,
+    verbose=0
+)
+
+print("Day 6 CNN Accuracy:", cnn_accuracy)
+print("Transfer Learning Accuracy:", transfer_accuracy)
+
+# Saves the Day 7 transfer learning classifier.
+transfer_model.save("models/product_transfer_model.keras")
+
+# Loads a pretrained YOLO model for product object detection.
+yolo_model = YOLO("yolov8n.pt")
+
+# Detects and locates objects in a catalog image using bounding boxes.
+yolo_results = yolo_model("product_image.jpg")
+
+# Saves the detected image with its bounding boxes.
+for result in yolo_results:
+    result.save(filename="detected_product.jpg")
