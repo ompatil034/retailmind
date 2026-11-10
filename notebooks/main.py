@@ -363,3 +363,77 @@ print("ANN Recall:", ann_recall)
 
 # Saves the trained Day 5 ANN model.
 ann.save("models/churn_ann.keras")
+
+
+
+### DAY 6
+
+# Imports the Day 6 TensorFlow and Keras tools needed for the CNN.
+from tensorflow.keras.datasets import fashion_mnist
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dropout
+
+# Loads the Fashion-MNIST training and testing images.
+(X_train_cnn, y_train_cnn), (X_test_cnn, y_test_cnn) = fashion_mnist.load_data()
+
+# Normalises the image pixel values between 0 and 1.
+X_train_cnn = X_train_cnn / 255.0
+X_test_cnn = X_test_cnn / 255.0
+
+# Adds one channel dimension so the images can be given to the CNN.
+X_train_cnn = X_train_cnn[..., None]
+X_test_cnn = X_test_cnn[..., None]
+
+# Creates a simple CNN for classifying the 10 product categories.
+cnn = Sequential([
+    Conv2D(32, (3, 3), activation="relu", input_shape=(28, 28, 1)),
+    MaxPooling2D((2, 2)),
+    Conv2D(64, (3, 3), activation="relu"),
+    MaxPooling2D((2, 2)),
+    Dropout(0.25),
+    Flatten(),
+    Dense(64, activation="relu"),
+    Dense(10, activation="softmax")
+])
+
+# Compiles the CNN for product image classification.
+cnn.compile(
+    optimizer="adam",
+    loss="sparse_categorical_crossentropy",
+    metrics=["accuracy"]
+)
+
+# Trains the CNN on the Fashion-MNIST images.
+cnn.fit(
+    X_train_cnn,
+    y_train_cnn,
+    epochs=10,
+    batch_size=32,
+    validation_split=0.2,
+    verbose=1
+)
+
+# Evaluates and prints the CNN accuracy on the test images.
+cnn_loss, cnn_accuracy = cnn.evaluate(
+    X_test_cnn,
+    y_test_cnn,
+    verbose=0
+)
+
+print("CNN Accuracy:", cnn_accuracy)
+
+# Creates and prints the confusion matrix for the CNN predictions.
+cnn_predictions = cnn.predict(X_test_cnn, verbose=0)
+cnn_predicted_classes = cnn_predictions.argmax(axis=1)
+
+from sklearn.metrics import confusion_matrix
+
+cnn_confusion_matrix = confusion_matrix(
+    y_test_cnn,
+    cnn_predicted_classes
+)
+
+print("Confusion Matrix:")
+print(cnn_confusion_matrix)
+
+# Saves the Day 6 product image classifier.
+cnn.save("models/catalog_cnn.keras")
