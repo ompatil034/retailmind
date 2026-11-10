@@ -66,3 +66,64 @@ def predict(customer_data):
     return saved_model.predict(customer_data)
 
 
+
+###DAY 2
+
+# Imports the three Day 2 classification models.
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.svm import SVC
+
+# Creates the Decision Tree, Random Forest and SVM models.
+day2_models = {
+    "Decision Tree": DecisionTreeClassifier(random_state=42),
+    "Random Forest": RandomForestClassifier(random_state=42),
+    "SVM": SVC(probability=True, random_state=42)
+}
+
+# Trains each model using the same Day 1 preprocessing and compares the results.
+results = {}
+
+for name, classifier in day2_models.items():
+
+    pipeline = Pipeline([
+        ("preprocessor", preprocessor),
+        ("classifier", classifier)
+    ])
+
+    pipeline.fit(X_train, y_train)
+
+    y_pred = pipeline.predict(X_test)
+    y_prob = pipeline.predict_proba(X_test)[:, 1]
+
+    accuracy = accuracy_score(y_test, y_pred)
+    precision = precision_score(y_test, y_pred)
+    recall = recall_score(y_test, y_pred)
+    roc_auc = roc_auc_score(y_test, y_prob)
+
+    results[name] = {
+        "Accuracy": accuracy,
+        "Precision": precision,
+        "Recall": recall,
+        "ROC-AUC": roc_auc,
+        "Pipeline": pipeline
+    }
+
+# Prints the performance of all three models.
+for name, result in results.items():
+    print(name)
+    print("Accuracy:", result["Accuracy"])
+    print("Precision:", result["Precision"])
+    print("Recall:", result["Recall"])
+    print("ROC-AUC:", result["ROC-AUC"])
+    print()
+
+# Selects the model with the highest churn recall.
+best_model_name = max(results, key=lambda name: results[name]["Recall"])
+best_model = results[best_model_name]["Pipeline"]
+
+print("Best Model:", best_model_name)
+
+# Saves the Day 2 champion model alongside the Day 1 model.
+joblib.dump(best_model, "models/day2_champion.joblib")
+
