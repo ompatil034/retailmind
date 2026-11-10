@@ -127,3 +127,90 @@ print("Best Model:", best_model_name)
 # Saves the Day 2 champion model alongside the Day 1 model.
 joblib.dump(best_model, "models/day2_champion.joblib")
 
+
+
+###DAY 3
+
+# Imports the Day 3 tools for tuning and cross-validation.
+from sklearn.model_selection import GridSearchCV, cross_val_score
+
+# Creates simple parameter grids for the three Day 2 models.
+parameter_grids = {
+    "Decision Tree": {
+        "classifier__max_depth": [3, 5, 10],
+        "classifier__min_samples_split": [2, 5]
+    },
+    "Random Forest": {
+        "classifier__n_estimators": [100, 200],
+        "classifier__max_depth": [5, 10, None]
+    },
+    "SVM": {
+        "classifier__C": [0.1, 1, 10],
+        "classifier__kernel": ["linear", "rbf"]
+    }
+}
+
+# Tunes each model using GridSearchCV with cross-validation.
+tuned_results = {}
+
+for name, classifier in day2_models.items():
+
+    pipeline = Pipeline([
+        ("preprocessor", preprocessor),
+        ("classifier", classifier)
+    ])
+
+    grid_search = GridSearchCV(
+        pipeline,
+        parameter_grids[name],
+        cv=5,
+        scoring="recall"
+    )
+
+    grid_search.fit(X_train, y_train)
+
+    tuned_results[name] = {
+        "Model": grid_search.best_estimator_,
+        "Best Parameters": grid_search.best_params_,
+        "CV Recall": grid_search.best_score_
+    }
+
+# Prints the best parameters and cross-validation recall for each model.
+for name, result in tuned_results.items():
+    print(name)
+    print("Best Parameters:", result["Best Parameters"])
+    print("CV Recall:", result["CV Recall"])
+    print()
+
+# Compares training and validation scores to check bias and variance.
+for name, result in tuned_results.items():
+
+    tuned_model = result["Model"]
+
+    train_score = tuned_model.score(X_train, y_train)
+
+    validation_scores = cross_val_score(
+        tuned_model,
+        X_train,
+        y_train,
+        cv=5,
+        scoring="accuracy"
+    )
+
+    print(name)
+    print("Training Accuracy:", train_score)
+    print("Validation Accuracy:", validation_scores.mean())
+    print()
+
+# Selects the tuned model with the highest cross-validation recall.
+best_tuned_model_name = max(
+    tuned_results,
+    key=lambda name: tuned_results[name]["CV Recall"]
+)
+
+best_tuned_model = tuned_results[best_tuned_model_name]["Model"]
+
+print("Day 3 Champion:", best_tuned_model_name)
+
+# Saves the final tuned Day 3 champion model.
+joblib.dump(best_tuned_model, "models/churn_v3.joblib")
