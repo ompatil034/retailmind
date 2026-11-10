@@ -296,3 +296,70 @@ print("Day 4 Champion:", day4_champion_name)
 
 # Saves the final Day 4 churn model.
 joblib.dump(day4_champion, "models/churn_v4.joblib")
+
+
+###DAY 5
+
+# Imports the Day 5 tools needed to build and train the ANN.
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense
+from tensorflow.keras.callbacks import EarlyStopping
+
+# Preprocesses the same bank churn data for the neural network.
+X_train_ann = preprocessor_day4.fit_transform(X_train_day4)
+X_test_ann = preprocessor_day4.transform(X_test_day4)
+
+# Creates a simple feed-forward ANN with a sigmoid output.
+ann = Sequential([
+    Dense(16, activation="relu", input_shape=(X_train_ann.shape[1],)),
+    Dense(8, activation="relu"),
+    Dense(1, activation="sigmoid")
+])
+
+# Compiles the ANN for binary churn prediction.
+ann.compile(
+    optimizer="adam",
+    loss="binary_crossentropy",
+    metrics=["accuracy"]
+)
+
+# Stops training when validation loss stops improving.
+early_stopping = EarlyStopping(
+    monitor="val_loss",
+    patience=5,
+    restore_best_weights=True
+)
+
+# Trains the ANN using validation data and early stopping.
+ann.fit(
+    X_train_ann,
+    y_train_day4,
+    validation_split=0.2,
+    epochs=100,
+    batch_size=32,
+    callbacks=[early_stopping],
+    verbose=1
+)
+
+# Makes churn predictions using the trained ANN.
+ann_prob = ann.predict(X_test_ann, verbose=0).ravel()
+ann_pred = (ann_prob >= 0.5).astype(int)
+
+# Calculates and prints the ANN performance metrics.
+ann_accuracy = accuracy_score(y_test_day4, ann_pred)
+ann_precision = precision_score(y_test_day4, ann_pred)
+ann_recall = recall_score(y_test_day4, ann_pred)
+ann_roc_auc = roc_auc_score(y_test_day4, ann_prob)
+
+print("ANN Accuracy:", ann_accuracy)
+print("ANN Precision:", ann_precision)
+print("ANN Recall:", ann_recall)
+print("ANN ROC-AUC:", ann_roc_auc)
+
+# Compares the ANN recall with the Day 4 classical champion.
+print("Day 4 Champion Recall:", day4_results[day4_champion_name]["Recall"])
+print("ANN Recall:", ann_recall)
+
+# Saves the trained Day 5 ANN model.
+ann.save("models/churn_ann.keras")
