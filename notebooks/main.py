@@ -214,3 +214,85 @@ print("Day 3 Champion:", best_tuned_model_name)
 
 # Saves the final tuned Day 3 champion model.
 joblib.dump(best_tuned_model, "models/churn_v3.joblib")
+
+
+
+###DAY 4
+
+# Imports the Day 4 tools for feature selection, PCA and ensemble models.
+from sklearn.decomposition import PCA
+from sklearn.feature_selection import SelectKBest, f_classif
+from xgboost import XGBClassifier
+
+# Creates simple new features from the bank churn dataset.
+X_day4 = X.copy()
+X_day4["Balance_Age_Ratio"] = X_day4["Balance"] / X_day4["Age"]
+X_day4["Salary_Age_Ratio"] = X_day4["EstimatedSalary"] / X_day4["Age"]
+X_day4["Balance_Per_Product"] = X_day4["Balance"] / X_day4["NumOfProducts"]
+
+# Splits the Day 4 data into training and testing data.
+X_train_day4, X_test_day4, y_train_day4, y_test_day4 = train_test_split(
+    X_day4, y, test_size=0.2, random_state=42, stratify=y
+)
+
+# Separates the numerical and categorical columns after feature engineering.
+numeric_day4 = X_day4.select_dtypes(include=["int64", "float64"]).columns
+categorical_day4 = X_day4.select_dtypes(include=["str"]).columns
+
+# Creates preprocessing for the new Day 4 features.
+preprocessor_day4 = ColumnTransformer([
+    ("num", StandardScaler(), numeric_day4),
+    ("cat", OneHotEncoder(handle_unknown="ignore"), categorical_day4)
+])
+
+# Creates the Random Forest and XGBoost ensemble models.
+ensemble_models = {
+    "Random Forest": RandomForestClassifier(random_state=42),
+    "XGBoost": XGBClassifier(random_state=42, eval_metric="logloss")
+}
+
+# Trains and compares the Day 4 ensemble models.
+day4_results = {}
+
+for name, classifier in ensemble_models.items():
+
+    pipeline = Pipeline([
+        ("preprocessor", preprocessor_day4),
+        ("feature_selection", SelectKBest(score_func=f_classif, k=10)),
+        ("classifier", classifier)
+    ])
+
+    pipeline.fit(X_train_day4, y_train_day4)
+
+    y_pred = pipeline.predict(X_test_day4)
+    y_prob = pipeline.predict_proba(X_test_day4)[:, 1]
+
+    day4_results[name] = {
+        "Model": pipeline,
+        "Accuracy": accuracy_score(y_test_day4, y_pred),
+        "Precision": precision_score(y_test_day4, y_pred),
+        "Recall": recall_score(y_test_day4, y_pred),
+        "ROC-AUC": roc_auc_score(y_test_day4, y_prob)
+    }
+
+# Prints the performance of the Day 4 ensemble models.
+for name, result in day4_results.items():
+    print(name)
+    print("Accuracy:", result["Accuracy"])
+    print("Precision:", result["Precision"])
+    print("Recall:", result["Recall"])
+    print("ROC-AUC:", result["ROC-AUC"])
+    print()
+
+# Selects the Day 4 model with the highest churn recall.
+day4_champion_name = max(
+    day4_results,
+    key=lambda name: day4_results[name]["Recall"]
+)
+
+day4_champion = day4_results[day4_champion_name]["Model"]
+
+print("Day 4 Champion:", day4_champion_name)
+
+# Saves the final Day 4 churn model.
+joblib.dump(day4_champion, "models/churn_v4.joblib")
