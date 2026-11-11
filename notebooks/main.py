@@ -657,3 +657,102 @@ segmentation_model.save("models/product_segmentation.keras")
 
 
 ###DAY 9
+# Loads the sales data and creates a daily time series for one store and product.
+sales_df = pd.read_csv("data/train.csv", parse_dates=["date"])
+
+sales_series = (
+    sales_df[
+        (sales_df["store"] == sales_df["store"].iloc[0]) &
+        (sales_df["item"] == sales_df["item"].iloc[0])
+    ]
+    .groupby("date")["sales"]
+    .sum()
+    .sort_index()
+    .asfreq("D")
+    .fillna(0)
+)
+
+# Keeps the most recent 20 percent of the sales data for testing.
+split_index = int(len(sales_series) * 0.8)
+
+train_series = sales_series.iloc[:split_index]
+test_series = sales_series.iloc[split_index:]
+
+# Scales the sales data using only the training data.
+train_min = train_series.min()
+train_max = train_series.max()
+
+scaled_series = (sales_series - train_min) / (train_max - train_min)
+
+# Creates look-back windows for next-day demand prediction.
+look_back = 30
+X_lstm = []
+y_lstm = []
+
+for i in range(look_back, len(scaled_series)):
+    X_lstm.append(scaled_series.iloc[i - look_back:i].values)
+    y_lstm.append(scaled_series.iloc[i])
+
+X_lstm = tf.convert_to_tensor(X_lstm, dtype=tf.float32)
+y_lstm = tf.convert_to_tensor(y_lstm, dtype=tf.float32)
+
+X_lstm = tf.expand_dims(X_lstm, axis=2)
+
+# Splits the windows into training and testing data without shuffling.
+window_split = split_index - look_back
+
+X_train_lstm = X_lstm[:window_split]
+X_test_lstm = X_lstm[window_split:]
+y_train_lstm = y_lstm[:window_split]
+y_test_lstm = y_lstm[window_split:]
+
+# Builds a simple LSTM model for next-day demand forecasting.
+lstm_model = Sequential([
+    tf.keras.layers.Input(shape=(look_back, 1)),
+    tf.keras.layers.LSTM(50),
+    Dense(1)
+])
+
+# Compiles the LSTM model.
+lstm_model.compile(
+    optimizer="adam",
+    loss="mse"
+)
+
+# Trains the LSTM model using validation data.
+lstm_model.fit(
+    X_train_lstm,
+    y_train_lstm,
+    epochs=20,
+    batch_size=32,
+    validation_split=0.2,
+    shuffle=False,
+    verbose=1
+)
+
+# Converts predictions and actual values back to their original sales units.
+scaled_predictions = lstm_model.predict(X_test_lstm, verbose=0).ravel()
+
+actual_sales = y_test_lstm.numpy() * (train_max - train_min) + train_min
+predicted_sales = scaled_predictions * (train_max - train_min) + train_min
+
+# Calculates and prints MAE and RMSE in the original sales units.
+mae = tf.reduce_mean(tf.abs(actual_sales - predicted_sales))
+rmse = tf.sqrt(tf.reduce_mean(tf.square(actual_sales - predicted_sales)))
+
+print("MAE:", float(mae))
+print("RMSE:", float(rmse))
+
+# Plots the actual and predicted demand values.
+forecast_results = pd.DataFrame({
+    "Actual": actual_sales,
+    "Predicted": predicted_sales
+})
+
+forecast_results.plot(
+    title="Actual vs Predicted Demand",
+    figsize=(10, 5)
+)
+
+# Saves the Day 9 demand forecasting model.
+lstm_model.save("models/demand_lstm.keras")
