@@ -533,3 +533,127 @@ yolo_results = yolo_model("product_image.jpg")
 # Saves the detected image with its bounding boxes.
 for result in yolo_results:
     result.save(filename="detected_product.jpg")
+
+
+###DAY 8
+
+
+
+# Builds segmentation, background removal and Grad-CAM explainability for the vision module.
+import cv2
+import numpy as np
+from tensorflow.keras.layers import Input, UpSampling2D, Concatenate
+from tensorflow.keras.models import Model
+
+# Creates simple product masks from the Fashion-MNIST images.
+X_segmentation = X_train_cnn.astype("float32")
+y_segmentation = (X_segmentation > 0.1).astype("float32")
+
+# Builds a small U-Net-style segmentation model.
+segmentation_input = Input(shape=(28, 28, 1))
+
+conv1 = Conv2D(16, 3, activation="relu", padding="same")(segmentation_input)
+pool1 = MaxPooling2D(2)(conv1)
+
+conv2 = Conv2D(32, 3, activation="relu", padding="same")(pool1)
+pool2 = MaxPooling2D(2)(conv2)
+
+bridge = Conv2D(64, 3, activation="relu", padding="same")(pool2)
+
+up1 = UpSampling2D(2)(bridge)
+up1 = Concatenate()([up1, conv2])
+conv3 = Conv2D(32, 3, activation="relu", padding="same")(up1)
+
+up2 = UpSampling2D(2)(conv3)
+up2 = Concatenate()([up2, conv1])
+conv4 = Conv2D(16, 3, activation="relu", padding="same")(up2)
+
+segmentation_output = Conv2D(1, 1, activation="sigmoid")(conv4)
+
+segmentation_model = Model(segmentation_input, segmentation_output)
+
+# Compiles and trains the segmentation model.
+segmentation_model.compile(
+    optimizer="adam",
+    loss="binary_crossentropy",
+    metrics=["accuracy"]
+)
+
+segmentation_model.fit(
+    X_segmentation,
+    y_segmentation,
+    epochs=5,
+    batch_size=32,
+    validation_split=0.2,
+    verbose=1
+)
+
+# Predicts a product mask and places the product on a white background.
+sample_image = X_test_cnn[0]
+predicted_mask = segmentation_model.predict(
+    sample_image[None, ...],
+    verbose=0
+)[0]
+
+binary_mask = (predicted_mask > 0.5).astype("uint8")
+
+product_image = (sample_image * 255).astype("uint8")
+white_background = np.full_like(product_image, 255)
+
+clean_product_image = cv2.bitwise_and(
+    product_image,
+    product_image,
+    mask=binary_mask[:, :, 0]
+)
+
+inverse_mask = cv2.bitwise_not(binary_mask[:, :, 0])
+
+clean_background = cv2.bitwise_and(
+    white_background,
+    white_background,
+    mask=inverse_mask
+)
+
+catalog_image = cv2.add(clean_product_image, clean_background)
+
+cv2.imwrite("clean_catalog_image.png", catalog_image)
+
+# Creates a Grad-CAM heatmap for the transfer learning classifier.
+last_conv_layer = base_model.get_layer("Conv_1")
+
+grad_model = Model(
+    transfer_model.input,
+    [last_conv_layer.output, transfer_model.output]
+)
+
+gradcam_image = X_test_transfer[0:1]
+
+with tf.GradientTape() as tape:
+    convolution_output, predictions = grad_model(gradcam_image)
+    predicted_class = tf.argmax(predictions[0])
+    class_score = predictions[:, predicted_class]
+
+gradients = tape.gradient(class_score, convolution_output)
+weights = tf.reduce_mean(gradients, axis=(0, 1, 2))
+
+heatmap = tf.reduce_sum(
+    convolution_output[0] * weights,
+    axis=-1
+)
+
+heatmap = tf.maximum(heatmap, 0)
+heatmap = heatmap / (tf.reduce_max(heatmap) + 1e-8)
+heatmap = cv2.resize(heatmap.numpy(), (96, 96))
+heatmap = np.uint8(255 * heatmap)
+heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
+
+original_image = np.uint8(X_test_transfer[0].numpy() * 255)
+gradcam_result = cv2.addWeighted(original_image, 0.6, heatmap, 0.4, 0)
+
+cv2.imwrite("gradcam_product.png", gradcam_result)
+
+# Saves the Day 8 segmentation model.
+segmentation_model.save("models/product_segmentation.keras")
+
+
+###DAY 9
