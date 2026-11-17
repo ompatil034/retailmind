@@ -2,6 +2,7 @@
 
 
 import warnings
+
 warnings.filterwarnings("ignore")
 # Imports the libraries needed for the churn model.
 import pandas as pd
@@ -35,16 +36,17 @@ numeric_columns = X.select_dtypes(include=["int64", "float64"]).columns
 categorical_columns = X.select_dtypes(include=["str"]).columns
 
 # Scales numerical columns and converts categorical columns into numbers.
-preprocessor = ColumnTransformer([
-    ("num", StandardScaler(), numeric_columns),
-    ("cat", OneHotEncoder(handle_unknown="ignore"), categorical_columns)
-])
+preprocessor = ColumnTransformer(
+    [
+        ("num", StandardScaler(), numeric_columns),
+        ("cat", OneHotEncoder(handle_unknown="ignore"), categorical_columns),
+    ]
+)
 
 # Creates and trains the baseline Logistic Regression pipeline.
-model = Pipeline([
-    ("preprocessor", preprocessor),
-    ("classifier", LogisticRegression(max_iter=1000))
-])
+model = Pipeline(
+    [("preprocessor", preprocessor), ("classifier", LogisticRegression(max_iter=1000))]
+)
 
 model.fit(X_train, y_train)
 
@@ -60,11 +62,11 @@ print("ROC-AUC:", roc_auc_score(y_test, y_prob))
 # Saves the complete pipeline so it can be used in later days.
 joblib.dump(model, "models/churn_pipeline.joblib")
 
+
 # Uses the saved pipeline to predict whether a new customer will exit.
 def predict(customer_data):
     saved_model = joblib.load("models/churn_pipeline.joblib")
     return saved_model.predict(customer_data)
-
 
 
 ###DAY 2
@@ -78,7 +80,7 @@ from sklearn.svm import SVC
 day2_models = {
     "Decision Tree": DecisionTreeClassifier(random_state=42),
     "Random Forest": RandomForestClassifier(random_state=42),
-    "SVM": SVC(probability=True, random_state=42)
+    "SVM": SVC(probability=True, random_state=42),
 }
 
 # Trains each model using the same Day 1 preprocessing and compares the results.
@@ -86,10 +88,7 @@ results = {}
 
 for name, classifier in day2_models.items():
 
-    pipeline = Pipeline([
-        ("preprocessor", preprocessor),
-        ("classifier", classifier)
-    ])
+    pipeline = Pipeline([("preprocessor", preprocessor), ("classifier", classifier)])
 
     pipeline.fit(X_train, y_train)
 
@@ -106,7 +105,7 @@ for name, classifier in day2_models.items():
         "Precision": precision,
         "Recall": recall,
         "ROC-AUC": roc_auc,
-        "Pipeline": pipeline
+        "Pipeline": pipeline,
     }
 
 # Prints the performance of all three models.
@@ -128,7 +127,6 @@ print("Best Model:", best_model_name)
 joblib.dump(best_model, "models/day2_champion.joblib")
 
 
-
 ###DAY 3
 
 # Imports the Day 3 tools for tuning and cross-validation.
@@ -138,16 +136,13 @@ from sklearn.model_selection import GridSearchCV, cross_val_score
 parameter_grids = {
     "Decision Tree": {
         "classifier__max_depth": [3, 5, 10],
-        "classifier__min_samples_split": [2, 5]
+        "classifier__min_samples_split": [2, 5],
     },
     "Random Forest": {
         "classifier__n_estimators": [100, 200],
-        "classifier__max_depth": [5, 10, None]
+        "classifier__max_depth": [5, 10, None],
     },
-    "SVM": {
-        "classifier__C": [0.1, 1, 10],
-        "classifier__kernel": ["linear", "rbf"]
-    }
+    "SVM": {"classifier__C": [0.1, 1, 10], "classifier__kernel": ["linear", "rbf"]},
 }
 
 # Tunes each model using GridSearchCV with cross-validation.
@@ -155,24 +150,16 @@ tuned_results = {}
 
 for name, classifier in day2_models.items():
 
-    pipeline = Pipeline([
-        ("preprocessor", preprocessor),
-        ("classifier", classifier)
-    ])
+    pipeline = Pipeline([("preprocessor", preprocessor), ("classifier", classifier)])
 
-    grid_search = GridSearchCV(
-        pipeline,
-        parameter_grids[name],
-        cv=5,
-        scoring="recall"
-    )
+    grid_search = GridSearchCV(pipeline, parameter_grids[name], cv=5, scoring="recall")
 
     grid_search.fit(X_train, y_train)
 
     tuned_results[name] = {
         "Model": grid_search.best_estimator_,
         "Best Parameters": grid_search.best_params_,
-        "CV Recall": grid_search.best_score_
+        "CV Recall": grid_search.best_score_,
     }
 
 # Prints the best parameters and cross-validation recall for each model.
@@ -190,11 +177,7 @@ for name, result in tuned_results.items():
     train_score = tuned_model.score(X_train, y_train)
 
     validation_scores = cross_val_score(
-        tuned_model,
-        X_train,
-        y_train,
-        cv=5,
-        scoring="accuracy"
+        tuned_model, X_train, y_train, cv=5, scoring="accuracy"
     )
 
     print(name)
@@ -204,8 +187,7 @@ for name, result in tuned_results.items():
 
 # Selects the tuned model with the highest cross-validation recall.
 best_tuned_model_name = max(
-    tuned_results,
-    key=lambda name: tuned_results[name]["CV Recall"]
+    tuned_results, key=lambda name: tuned_results[name]["CV Recall"]
 )
 
 best_tuned_model = tuned_results[best_tuned_model_name]["Model"]
@@ -214,7 +196,6 @@ print("Day 3 Champion:", best_tuned_model_name)
 
 # Saves the final tuned Day 3 champion model.
 joblib.dump(best_tuned_model, "models/churn_v3.joblib")
-
 
 
 ###DAY 4
@@ -240,15 +221,17 @@ numeric_day4 = X_day4.select_dtypes(include=["int64", "float64"]).columns
 categorical_day4 = X_day4.select_dtypes(include=["str"]).columns
 
 # Creates preprocessing for the new Day 4 features.
-preprocessor_day4 = ColumnTransformer([
-    ("num", StandardScaler(), numeric_day4),
-    ("cat", OneHotEncoder(handle_unknown="ignore"), categorical_day4)
-])
+preprocessor_day4 = ColumnTransformer(
+    [
+        ("num", StandardScaler(), numeric_day4),
+        ("cat", OneHotEncoder(handle_unknown="ignore"), categorical_day4),
+    ]
+)
 
 # Creates the Random Forest and XGBoost ensemble models.
 ensemble_models = {
     "Random Forest": RandomForestClassifier(random_state=42),
-    "XGBoost": XGBClassifier(random_state=42, eval_metric="logloss")
+    "XGBoost": XGBClassifier(random_state=42, eval_metric="logloss"),
 }
 
 # Trains and compares the Day 4 ensemble models.
@@ -256,11 +239,13 @@ day4_results = {}
 
 for name, classifier in ensemble_models.items():
 
-    pipeline = Pipeline([
-        ("preprocessor", preprocessor_day4),
-        ("feature_selection", SelectKBest(score_func=f_classif, k=10)),
-        ("classifier", classifier)
-    ])
+    pipeline = Pipeline(
+        [
+            ("preprocessor", preprocessor_day4),
+            ("feature_selection", SelectKBest(score_func=f_classif, k=10)),
+            ("classifier", classifier),
+        ]
+    )
 
     pipeline.fit(X_train_day4, y_train_day4)
 
@@ -272,7 +257,7 @@ for name, classifier in ensemble_models.items():
         "Accuracy": accuracy_score(y_test_day4, y_pred),
         "Precision": precision_score(y_test_day4, y_pred),
         "Recall": recall_score(y_test_day4, y_pred),
-        "ROC-AUC": roc_auc_score(y_test_day4, y_prob)
+        "ROC-AUC": roc_auc_score(y_test_day4, y_prob),
     }
 
 # Prints the performance of the Day 4 ensemble models.
@@ -285,10 +270,7 @@ for name, result in day4_results.items():
     print()
 
 # Selects the Day 4 model with the highest churn recall.
-day4_champion_name = max(
-    day4_results,
-    key=lambda name: day4_results[name]["Recall"]
-)
+day4_champion_name = max(day4_results, key=lambda name: day4_results[name]["Recall"])
 
 day4_champion = day4_results[day4_champion_name]["Model"]
 
@@ -311,24 +293,20 @@ X_train_ann = preprocessor_day4.fit_transform(X_train_day4)
 X_test_ann = preprocessor_day4.transform(X_test_day4)
 
 # Creates a simple feed-forward ANN with a sigmoid output.
-ann = Sequential([
-    Dense(16, activation="relu", input_shape=(X_train_ann.shape[1],)),
-    Dense(8, activation="relu"),
-    Dense(1, activation="sigmoid")
-])
+ann = Sequential(
+    [
+        Dense(16, activation="relu", input_shape=(X_train_ann.shape[1],)),
+        Dense(8, activation="relu"),
+        Dense(1, activation="sigmoid"),
+    ]
+)
 
 # Compiles the ANN for binary churn prediction.
-ann.compile(
-    optimizer="adam",
-    loss="binary_crossentropy",
-    metrics=["accuracy"]
-)
+ann.compile(optimizer="adam", loss="binary_crossentropy", metrics=["accuracy"])
 
 # Stops training when validation loss stops improving.
 early_stopping = EarlyStopping(
-    monitor="val_loss",
-    patience=5,
-    restore_best_weights=True
+    monitor="val_loss", patience=5, restore_best_weights=True
 )
 
 # Trains the ANN using validation data and early stopping.
@@ -339,7 +317,7 @@ ann.fit(
     epochs=100,
     batch_size=32,
     callbacks=[early_stopping],
-    verbose=1
+    verbose=1,
 )
 
 # Makes churn predictions using the trained ANN.
@@ -365,7 +343,6 @@ print("ANN Recall:", ann_recall)
 ann.save("models/churn_ann.keras")
 
 
-
 ### DAY 6
 
 # Imports the Day 6 TensorFlow and Keras tools needed for the CNN.
@@ -384,40 +361,31 @@ X_train_cnn = X_train_cnn[..., None]
 X_test_cnn = X_test_cnn[..., None]
 
 # Creates a simple CNN for classifying the 10 product categories.
-cnn = Sequential([
-    Conv2D(32, (3, 3), activation="relu", input_shape=(28, 28, 1)),
-    MaxPooling2D((2, 2)),
-    Conv2D(64, (3, 3), activation="relu"),
-    MaxPooling2D((2, 2)),
-    Dropout(0.25),
-    Flatten(),
-    Dense(64, activation="relu"),
-    Dense(10, activation="softmax")
-])
+cnn = Sequential(
+    [
+        Conv2D(32, (3, 3), activation="relu", input_shape=(28, 28, 1)),
+        MaxPooling2D((2, 2)),
+        Conv2D(64, (3, 3), activation="relu"),
+        MaxPooling2D((2, 2)),
+        Dropout(0.25),
+        Flatten(),
+        Dense(64, activation="relu"),
+        Dense(10, activation="softmax"),
+    ]
+)
 
 # Compiles the CNN for product image classification.
 cnn.compile(
-    optimizer="adam",
-    loss="sparse_categorical_crossentropy",
-    metrics=["accuracy"]
+    optimizer="adam", loss="sparse_categorical_crossentropy", metrics=["accuracy"]
 )
 
 # Trains the CNN on the Fashion-MNIST images.
 cnn.fit(
-    X_train_cnn,
-    y_train_cnn,
-    epochs=10,
-    batch_size=32,
-    validation_split=0.2,
-    verbose=1
+    X_train_cnn, y_train_cnn, epochs=10, batch_size=32, validation_split=0.2, verbose=1
 )
 
 # Evaluates and prints the CNN accuracy on the test images.
-cnn_loss, cnn_accuracy = cnn.evaluate(
-    X_test_cnn,
-    y_test_cnn,
-    verbose=0
-)
+cnn_loss, cnn_accuracy = cnn.evaluate(X_test_cnn, y_test_cnn, verbose=0)
 
 print("CNN Accuracy:", cnn_accuracy)
 
@@ -427,10 +395,7 @@ cnn_predicted_classes = cnn_predictions.argmax(axis=1)
 
 from sklearn.metrics import confusion_matrix
 
-cnn_confusion_matrix = confusion_matrix(
-    y_test_cnn,
-    cnn_predicted_classes
-)
+cnn_confusion_matrix = confusion_matrix(y_test_cnn, cnn_predicted_classes)
 
 print("Confusion Matrix:")
 print(cnn_confusion_matrix)
@@ -448,11 +413,7 @@ from tensorflow.keras.models import Model
 from ultralytics import YOLO
 
 # Creates a pretrained MobileNetV2 model without its original output layer.
-base_model = MobileNetV2(
-    weights="imagenet",
-    include_top=False,
-    input_shape=(96, 96, 3)
-)
+base_model = MobileNetV2(weights="imagenet", include_top=False, input_shape=(96, 96, 3))
 
 # Freezes the pretrained layers for transfer learning.
 base_model.trainable = False
@@ -461,16 +422,11 @@ base_model.trainable = False
 x = GlobalAveragePooling2D()(base_model.output)
 output = Dense(10, activation="softmax")(x)
 
-transfer_model = Model(
-    inputs=base_model.input,
-    outputs=output
-)
+transfer_model = Model(inputs=base_model.input, outputs=output)
 
 # Compiles the transfer learning model.
 transfer_model.compile(
-    optimizer="adam",
-    loss="sparse_categorical_crossentropy",
-    metrics=["accuracy"]
+    optimizer="adam", loss="sparse_categorical_crossentropy", metrics=["accuracy"]
 )
 
 # Resizes Fashion-MNIST images and converts them to three channels.
@@ -487,7 +443,7 @@ transfer_model.fit(
     epochs=5,
     batch_size=32,
     validation_split=0.2,
-    verbose=1
+    verbose=1,
 )
 
 # Fine-tunes the top layers of the pretrained model.
@@ -499,7 +455,7 @@ for layer in base_model.layers[:-20]:
 transfer_model.compile(
     optimizer=tf.keras.optimizers.Adam(learning_rate=0.0001),
     loss="sparse_categorical_crossentropy",
-    metrics=["accuracy"]
+    metrics=["accuracy"],
 )
 
 transfer_model.fit(
@@ -508,14 +464,12 @@ transfer_model.fit(
     epochs=3,
     batch_size=32,
     validation_split=0.2,
-    verbose=1
+    verbose=1,
 )
 
 # Evaluates transfer learning accuracy against the Day 6 CNN.
 transfer_loss, transfer_accuracy = transfer_model.evaluate(
-    X_test_transfer,
-    y_test_cnn,
-    verbose=0
+    X_test_transfer, y_test_cnn, verbose=0
 )
 
 print("Day 6 CNN Accuracy:", cnn_accuracy)
@@ -536,7 +490,6 @@ for result in yolo_results:
 
 
 ###DAY 8
-
 
 
 # Builds segmentation, background removal and Grad-CAM explainability for the vision module.
@@ -574,9 +527,7 @@ segmentation_model = Model(segmentation_input, segmentation_output)
 
 # Compiles and trains the segmentation model.
 segmentation_model.compile(
-    optimizer="adam",
-    loss="binary_crossentropy",
-    metrics=["accuracy"]
+    optimizer="adam", loss="binary_crossentropy", metrics=["accuracy"]
 )
 
 segmentation_model.fit(
@@ -585,15 +536,12 @@ segmentation_model.fit(
     epochs=5,
     batch_size=32,
     validation_split=0.2,
-    verbose=1
+    verbose=1,
 )
 
 # Predicts a product mask and places the product on a white background.
 sample_image = X_test_cnn[0]
-predicted_mask = segmentation_model.predict(
-    sample_image[None, ...],
-    verbose=0
-)[0]
+predicted_mask = segmentation_model.predict(sample_image[None, ...], verbose=0)[0]
 
 binary_mask = (predicted_mask > 0.5).astype("uint8")
 
@@ -601,17 +549,13 @@ product_image = (sample_image * 255).astype("uint8")
 white_background = np.full_like(product_image, 255)
 
 clean_product_image = cv2.bitwise_and(
-    product_image,
-    product_image,
-    mask=binary_mask[:, :, 0]
+    product_image, product_image, mask=binary_mask[:, :, 0]
 )
 
 inverse_mask = cv2.bitwise_not(binary_mask[:, :, 0])
 
 clean_background = cv2.bitwise_and(
-    white_background,
-    white_background,
-    mask=inverse_mask
+    white_background, white_background, mask=inverse_mask
 )
 
 catalog_image = cv2.add(clean_product_image, clean_background)
@@ -622,8 +566,7 @@ cv2.imwrite("clean_catalog_image.png", catalog_image)
 last_conv_layer = base_model.get_layer("Conv_1")
 
 grad_model = Model(
-    transfer_model.input,
-    [last_conv_layer.output, transfer_model.output]
+    transfer_model.input, [last_conv_layer.output, transfer_model.output]
 )
 
 gradcam_image = X_test_transfer[0:1]
@@ -636,10 +579,7 @@ with tf.GradientTape() as tape:
 gradients = tape.gradient(class_score, convolution_output)
 weights = tf.reduce_mean(gradients, axis=(0, 1, 2))
 
-heatmap = tf.reduce_sum(
-    convolution_output[0] * weights,
-    axis=-1
-)
+heatmap = tf.reduce_sum(convolution_output[0] * weights, axis=-1)
 
 heatmap = tf.maximum(heatmap, 0)
 heatmap = heatmap / (tf.reduce_max(heatmap) + 1e-8)
@@ -662,8 +602,8 @@ sales_df = pd.read_csv("data/train.csv", parse_dates=["date"])
 
 sales_series = (
     sales_df[
-        (sales_df["store"] == sales_df["store"].iloc[0]) &
-        (sales_df["item"] == sales_df["item"].iloc[0])
+        (sales_df["store"] == sales_df["store"].iloc[0])
+        & (sales_df["item"] == sales_df["item"].iloc[0])
     ]
     .groupby("date")["sales"]
     .sum()
@@ -690,7 +630,7 @@ X_lstm = []
 y_lstm = []
 
 for i in range(look_back, len(scaled_series)):
-    X_lstm.append(scaled_series.iloc[i - look_back:i].values)
+    X_lstm.append(scaled_series.iloc[i - look_back : i].values)
     y_lstm.append(scaled_series.iloc[i])
 
 X_lstm = tf.convert_to_tensor(X_lstm, dtype=tf.float32)
@@ -707,17 +647,12 @@ y_train_lstm = y_lstm[:window_split]
 y_test_lstm = y_lstm[window_split:]
 
 # Builds a simple LSTM model for next-day demand forecasting.
-lstm_model = Sequential([
-    tf.keras.layers.Input(shape=(look_back, 1)),
-    tf.keras.layers.LSTM(50),
-    Dense(1)
-])
+lstm_model = Sequential(
+    [tf.keras.layers.Input(shape=(look_back, 1)), tf.keras.layers.LSTM(50), Dense(1)]
+)
 
 # Compiles the LSTM model.
-lstm_model.compile(
-    optimizer="adam",
-    loss="mse"
-)
+lstm_model.compile(optimizer="adam", loss="mse")
 
 # Trains the LSTM model using validation data.
 lstm_model.fit(
@@ -727,7 +662,7 @@ lstm_model.fit(
     batch_size=32,
     validation_split=0.2,
     shuffle=False,
-    verbose=1
+    verbose=1,
 )
 
 # Converts predictions and actual values back to their original sales units.
@@ -744,15 +679,121 @@ print("MAE:", float(mae))
 print("RMSE:", float(rmse))
 
 # Plots the actual and predicted demand values.
-forecast_results = pd.DataFrame({
-    "Actual": actual_sales,
-    "Predicted": predicted_sales
-})
+forecast_results = pd.DataFrame({"Actual": actual_sales, "Predicted": predicted_sales})
 
-forecast_results.plot(
-    title="Actual vs Predicted Demand",
-    figsize=(10, 5)
-)
+forecast_results.plot(title="Actual vs Predicted Demand", figsize=(10, 5))
 
 # Saves the Day 9 demand forecasting model.
 lstm_model.save("models/demand_lstm.keras")
+
+
+###DAY 10
+
+# Creates multi-step windows for seven-day demand forecasting.
+forecast_horizon = 7
+
+X_seq2seq = []
+y_seq2seq = []
+target_indexes = []
+
+for i in range(look_back, len(scaled_series) - forecast_horizon + 1):
+    X_seq2seq.append(scaled_series.iloc[i - look_back : i].values)
+    y_seq2seq.append(scaled_series.iloc[i : i + forecast_horizon].values)
+    target_indexes.append(i)
+
+X_seq2seq = np.array(X_seq2seq, dtype="float32")[..., None]
+y_seq2seq = np.array(y_seq2seq, dtype="float32")[..., None]
+target_indexes = np.array(target_indexes)
+
+# Splits the sequence data while keeping the latest period for testing.
+train_mask = target_indexes + forecast_horizon <= split_index
+test_mask = target_indexes >= split_index
+
+X_train_seq2seq = X_seq2seq[train_mask]
+y_train_seq2seq = y_seq2seq[train_mask]
+
+X_test_seq2seq = X_seq2seq[test_mask]
+y_test_seq2seq = y_seq2seq[test_mask]
+
+# Builds the encoder for reading the historical demand window.
+encoder_input = tf.keras.layers.Input(shape=(look_back, 1), name="encoder_input")
+
+encoder_output, encoder_state_h, encoder_state_c = tf.keras.layers.LSTM(
+    64, return_sequences=True, return_state=True, name="encoder"
+)(encoder_input)
+
+# Builds the decoder for producing seven future demand values.
+decoder_input = tf.keras.layers.RepeatVector(forecast_horizon)(encoder_state_h)
+
+decoder_output = tf.keras.layers.LSTM(64, return_sequences=True, name="decoder")(
+    decoder_input, initial_state=[encoder_state_h, encoder_state_c]
+)
+
+# Adds attention so the decoder can focus on useful historical days.
+attention_output, attention_scores = tf.keras.layers.AdditiveAttention(
+    name="attention"
+)([decoder_output, encoder_output], return_attention_scores=True)
+
+combined_output = tf.keras.layers.Concatenate()([decoder_output, attention_output])
+
+forecast_output = tf.keras.layers.TimeDistributed(Dense(1), name="forecast")(
+    combined_output
+)
+
+# Creates and compiles the Seq2Seq attention model.
+seq2seq_model = Model(inputs=encoder_input, outputs=forecast_output)
+
+seq2seq_model.compile(optimizer="adam", loss="mse")
+
+# Trains the model to forecast the next seven days.
+seq2seq_model.fit(
+    X_train_seq2seq,
+    y_train_seq2seq,
+    epochs=20,
+    batch_size=32,
+    validation_split=0.2,
+    shuffle=False,
+    verbose=1,
+)
+
+# Predicts seven future demand values for every test window.
+scaled_seq2seq_predictions = seq2seq_model.predict(X_test_seq2seq, verbose=0)
+
+actual_seq2seq = y_test_seq2seq.squeeze(-1) * (train_max - train_min) + train_min
+
+predicted_seq2seq = (
+    scaled_seq2seq_predictions.squeeze(-1) * (train_max - train_min) + train_min
+)
+
+# Calculates the multi-step MAE and RMSE in original sales units.
+seq2seq_mae = tf.reduce_mean(tf.abs(actual_seq2seq - predicted_seq2seq))
+
+seq2seq_rmse = tf.sqrt(tf.reduce_mean(tf.square(actual_seq2seq - predicted_seq2seq)))
+
+print("Day 9 LSTM RMSE:", float(rmse))
+print("Seq2Seq MAE:", float(seq2seq_mae))
+print("Seq2Seq RMSE:", float(seq2seq_rmse))
+
+# Plots the actual and predicted demand for the first test forecast.
+multi_step_results = pd.DataFrame(
+    {"Actual": actual_seq2seq[0], "Predicted": predicted_seq2seq[0]}
+)
+
+multi_step_results.plot(title="Seven-Day Actual vs Predicted Demand", figsize=(10, 5))
+
+# Creates a model that returns the attention weights.
+attention_model = Model(inputs=encoder_input, outputs=attention_scores)
+
+attention_weights = attention_model.predict(X_test_seq2seq[:1], verbose=0)[0]
+
+# Plots the attention given to each historical day.
+attention_dataframe = pd.DataFrame(
+    attention_weights,
+    columns=[f"History Day {day + 1}" for day in range(look_back)],
+    index=[f"Forecast Day {day + 1}" for day in range(forecast_horizon)],
+)
+
+attention_dataframe.T.plot(title="Attention Weights", figsize=(10, 5))
+
+# Saves the Day 10 multi-step demand forecasting model.
+seq2seq_model.save("models/demand_seq2seq_attention.keras")
