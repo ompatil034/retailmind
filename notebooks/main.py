@@ -947,3 +947,79 @@ print("Accuracy After:", class_accuracy_after[rare_class])
 # Saves the Day 11 generator and augmented product classifier.
 generator.save("models/product_generator.keras")
 augmented_cnn.save("models/augmented_catalog_cnn.keras")
+
+
+###DAY 12
+# Imports the Day 12 tools for text cleaning, TF-IDF and sentiment classification.
+import re
+import nltk
+import joblib
+import pandas as pd
+from nltk.corpus import stopwords
+from sklearn.model_selection import train_test_split
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import Pipeline
+from sklearn.metrics import accuracy_score, precision_score, recall_score
+
+# Loads the Amazon product review dataset.
+reviews_df = pd.read_csv("data/amazon_reviews.csv")
+
+# Downloads and loads English stopwords for review cleaning.
+nltk.download("stopwords")
+stop_words = set(stopwords.words("english"))
+
+
+# Cleans reviews by using lowercase text, removing noise and removing stopwords.
+def clean_review(text):
+    text = str(text).lower()
+    text = re.sub(r"[^a-z\s]", " ", text)
+    words = text.split()
+    words = [word for word in words if word not in stop_words]
+    return " ".join(words)
+
+
+reviews_df["clean_text"] = reviews_df["text"].apply(clean_review)
+
+# Separates the cleaned reviews and sentiment labels.
+X_text = reviews_df["clean_text"]
+y_text = reviews_df["label"]
+
+# Splits the reviews into training and testing data.
+X_train_text, X_test_text, y_train_text, y_test_text = train_test_split(
+    X_text, y_text, test_size=0.2, random_state=42, stratify=y_text
+)
+
+# Creates the TF-IDF and Logistic Regression sentiment pipeline.
+sentiment_model = Pipeline(
+    [
+        ("tfidf", TfidfVectorizer(max_features=5000)),
+        ("classifier", LogisticRegression(max_iter=1000)),
+    ]
+)
+
+# Trains the classical sentiment classifier.
+sentiment_model.fit(X_train_text, y_train_text)
+
+# Predicts sentiment and evaluates the baseline model.
+sentiment_predictions = sentiment_model.predict(X_test_text)
+
+print("Accuracy:", accuracy_score(y_test_text, sentiment_predictions))
+print("Precision:", precision_score(y_test_text, sentiment_predictions))
+print("Recall:", recall_score(y_test_text, sentiment_predictions))
+
+# Finds the most informative positive and negative review terms.
+tfidf = sentiment_model.named_steps["tfidf"]
+classifier = sentiment_model.named_steps["classifier"]
+
+feature_names = tfidf.get_feature_names_out()
+coefficients = classifier.coef_[0]
+
+positive_terms = feature_names[coefficients.argsort()[-10:][::-1]]
+negative_terms = feature_names[coefficients.argsort()[:10]]
+
+print("Positive Terms:", positive_terms)
+print("Negative Terms:", negative_terms)
+
+# Saves the Day 12 review-processing and sentiment module.
+joblib.dump(sentiment_model, "models/review_sentiment_pipeline.joblib")
