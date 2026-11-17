@@ -797,3 +797,153 @@ attention_dataframe.T.plot(title="Attention Weights", figsize=(10, 5))
 
 # Saves the Day 10 multi-step demand forecasting model.
 seq2seq_model.save("models/demand_seq2seq_attention.keras")
+
+###DAY 11
+
+# Finds the product class with the lowest Day 6 classification accuracy.
+class_accuracy_before = []
+
+for class_number in range(10):
+    class_mask = y_test_cnn == class_number
+    class_accuracy = np.mean(
+        cnn_predicted_classes[class_mask] == y_test_cnn[class_mask]
+    )
+    class_accuracy_before.append(class_accuracy)
+
+rare_class = int(np.argmin(class_accuracy_before))
+
+# Selects images from the lowest-performing product class.
+rare_images = X_train_cnn[y_train_cnn == rare_class]
+rare_images = rare_images * 2.0 - 1.0
+
+# Builds a generator for creating synthetic product images.
+generator = Sequential(
+    [
+        tf.keras.layers.Input(shape=(100,)),
+        Dense(7 * 7 * 128),
+        tf.keras.layers.Reshape((7, 7, 128)),
+        tf.keras.layers.Conv2DTranspose(
+            64, 4, strides=2, padding="same", activation="relu"
+        ),
+        tf.keras.layers.Conv2DTranspose(
+            1, 4, strides=2, padding="same", activation="tanh"
+        ),
+    ]
+)
+
+# Builds a discriminator for identifying real and synthetic images.
+discriminator = Sequential(
+    [
+        tf.keras.layers.Input(shape=(28, 28, 1)),
+        Conv2D(64, 4, strides=2, padding="same"),
+        tf.keras.layers.LeakyReLU(negative_slope=0.2),
+        Dropout(0.3),
+        Conv2D(128, 4, strides=2, padding="same"),
+        tf.keras.layers.LeakyReLU(negative_slope=0.2),
+        Dropout(0.3),
+        Flatten(),
+        Dense(1, activation="sigmoid"),
+    ]
+)
+
+# Creates the optimizers and loss function for GAN training.
+generator_optimizer = tf.keras.optimizers.Adam(0.0002)
+discriminator_optimizer = tf.keras.optimizers.Adam(0.0002)
+gan_loss = tf.keras.losses.BinaryCrossentropy()
+
+# Trains the generator and discriminator on the selected product class.
+batch_size = 64
+epochs = 20
+
+rare_dataset = (
+    tf.data.Dataset.from_tensor_slices(rare_images)
+    .shuffle(len(rare_images))
+    .batch(batch_size)
+)
+
+for epoch in range(epochs):
+    for real_images in rare_dataset:
+        current_batch_size = tf.shape(real_images)[0]
+        noise = tf.random.normal((current_batch_size, 100))
+
+        with tf.GradientTape() as generator_tape, tf.GradientTape() as discriminator_tape:
+            generated_images = generator(noise, training=True)
+
+            real_output = discriminator(real_images, training=True)
+            generated_output = discriminator(generated_images, training=True)
+
+            generator_loss = gan_loss(tf.ones_like(generated_output), generated_output)
+
+            discriminator_loss = gan_loss(
+                tf.ones_like(real_output), real_output
+            ) + gan_loss(tf.zeros_like(generated_output), generated_output)
+
+        generator_gradients = generator_tape.gradient(
+            generator_loss, generator.trainable_variables
+        )
+
+        discriminator_gradients = discriminator_tape.gradient(
+            discriminator_loss, discriminator.trainable_variables
+        )
+
+        generator_optimizer.apply_gradients(
+            zip(generator_gradients, generator.trainable_variables)
+        )
+
+        discriminator_optimizer.apply_gradients(
+            zip(discriminator_gradients, discriminator.trainable_variables)
+        )
+
+# Generates synthetic images for the lowest-performing product class.
+synthetic_images = generator.predict(tf.random.normal((1000, 100)), verbose=0)
+
+synthetic_images = (synthetic_images + 1.0) / 2.0
+synthetic_images = np.clip(synthetic_images, 0.0, 1.0)
+
+# Keeps synthetic images with enough visible detail.
+image_variance = np.var(synthetic_images, axis=(1, 2, 3))
+realistic_mask = image_variance > 0.01
+synthetic_images = synthetic_images[realistic_mask]
+synthetic_labels = np.full(len(synthetic_images), rare_class)
+
+# Adds the synthetic images to the original classifier training data.
+X_train_augmented = np.concatenate([X_train_cnn, synthetic_images], axis=0)
+
+y_train_augmented = np.concatenate([y_train_cnn, synthetic_labels], axis=0)
+
+# Fine-tunes a copy of the Day 6 classifier using the augmented data.
+augmented_cnn = tf.keras.models.clone_model(cnn)
+augmented_cnn.set_weights(cnn.get_weights())
+
+augmented_cnn.compile(
+    optimizer="adam", loss="sparse_categorical_crossentropy", metrics=["accuracy"]
+)
+
+augmented_cnn.fit(
+    X_train_augmented,
+    y_train_augmented,
+    epochs=5,
+    batch_size=32,
+    validation_split=0.2,
+    verbose=1,
+)
+
+# Measures per-class accuracy after adding the synthetic images.
+augmented_predictions = augmented_cnn.predict(X_test_cnn, verbose=0).argmax(axis=1)
+
+class_accuracy_after = []
+
+for class_number in range(10):
+    class_mask = y_test_cnn == class_number
+    class_accuracy = np.mean(
+        augmented_predictions[class_mask] == y_test_cnn[class_mask]
+    )
+    class_accuracy_after.append(class_accuracy)
+
+print("Augmented Class:", rare_class)
+print("Accuracy Before:", class_accuracy_before[rare_class])
+print("Accuracy After:", class_accuracy_after[rare_class])
+
+# Saves the Day 11 generator and augmented product classifier.
+generator.save("models/product_generator.keras")
+augmented_cnn.save("models/augmented_catalog_cnn.keras")
