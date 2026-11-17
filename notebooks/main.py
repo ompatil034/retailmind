@@ -1023,3 +1023,149 @@ print("Negative Terms:", negative_terms)
 
 # Saves the Day 12 review-processing and sentiment module.
 joblib.dump(sentiment_model, "models/review_sentiment_pipeline.joblib")
+
+
+###DAY 13
+# Imports the Day 13 tools for BERT sentiment and ticket classification.
+import numpy as np
+from transformers import AutoTokenizer
+from transformers import TFAutoModelForSequenceClassification
+from sklearn.metrics import classification_report
+
+# Loads the pretrained BERT tokenizer.
+bert_model_name = "distilbert-base-uncased"
+bert_tokenizer = AutoTokenizer.from_pretrained(bert_model_name)
+
+# Converts the review text into BERT inputs.
+train_tokens = bert_tokenizer(
+    X_train_text.tolist(),
+    padding=True,
+    truncation=True,
+    max_length=128,
+    return_tensors="tf",
+)
+
+test_tokens = bert_tokenizer(
+    X_test_text.tolist(),
+    padding=True,
+    truncation=True,
+    max_length=128,
+    return_tensors="tf",
+)
+
+# Loads and compiles BERT for sentiment classification.
+bert_sentiment_model = TFAutoModelForSequenceClassification.from_pretrained(
+    bert_model_name, num_labels=2
+)
+
+bert_sentiment_model.compile(
+    optimizer=tf.keras.optimizers.Adam(learning_rate=2e-5),
+    loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+    metrics=["accuracy"],
+)
+
+# Fine-tunes BERT on the Amazon reviews.
+bert_sentiment_model.fit(
+    dict(train_tokens),
+    np.array(y_train_text),
+    validation_split=0.2,
+    epochs=2,
+    batch_size=16,
+    verbose=1,
+)
+
+# Evaluates BERT and compares it with the Day 12 baseline.
+bert_outputs = bert_sentiment_model.predict(dict(test_tokens), verbose=0).logits
+
+bert_predictions = np.argmax(bert_outputs, axis=1)
+
+bert_accuracy = accuracy_score(y_test_text, bert_predictions)
+baseline_accuracy = accuracy_score(y_test_text, sentiment_predictions)
+
+print("Day 12 TF-IDF Accuracy:", baseline_accuracy)
+print("Day 13 BERT Accuracy:", bert_accuracy)
+print(classification_report(y_test_text, bert_predictions))
+
+
+# Creates simple support-ticket categories from review text.
+def create_ticket_category(text):
+    text = str(text).lower()
+
+    if any(word in text for word in ["delivery", "shipping", "late", "arrived"]):
+        return 0
+
+    if any(word in text for word in ["refund", "return", "money"]):
+        return 1
+
+    if any(word in text for word in ["broken", "damaged", "defective"]):
+        return 2
+
+    return 3
+
+
+reviews_df["ticket_category"] = reviews_df["text"].apply(create_ticket_category)
+
+# Splits the support-ticket text and categories.
+X_train_ticket, X_test_ticket, y_train_ticket, y_test_ticket = train_test_split(
+    reviews_df["text"],
+    reviews_df["ticket_category"],
+    test_size=0.2,
+    random_state=42,
+    stratify=reviews_df["ticket_category"],
+)
+
+# Converts the support-ticket text into BERT inputs.
+train_ticket_tokens = bert_tokenizer(
+    X_train_ticket.tolist(),
+    padding=True,
+    truncation=True,
+    max_length=128,
+    return_tensors="tf",
+)
+
+test_ticket_tokens = bert_tokenizer(
+    X_test_ticket.tolist(),
+    padding=True,
+    truncation=True,
+    max_length=128,
+    return_tensors="tf",
+)
+
+# Loads and compiles BERT for support-ticket routing.
+ticket_model = TFAutoModelForSequenceClassification.from_pretrained(
+    bert_model_name, num_labels=4
+)
+
+ticket_model.compile(
+    optimizer=tf.keras.optimizers.Adam(learning_rate=2e-5),
+    loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+    metrics=["accuracy"],
+)
+
+# Fine-tunes BERT for support-ticket classification.
+ticket_model.fit(
+    dict(train_ticket_tokens),
+    np.array(y_train_ticket),
+    validation_split=0.2,
+    epochs=2,
+    batch_size=16,
+    verbose=1,
+)
+
+# Evaluates the ticket-routing model for every category.
+ticket_outputs = ticket_model.predict(dict(test_ticket_tokens), verbose=0).logits
+
+ticket_predictions = np.argmax(ticket_outputs, axis=1)
+
+print(
+    classification_report(
+        y_test_ticket,
+        ticket_predictions,
+        target_names=["Delivery", "Refund", "Damaged Product", "General"],
+    )
+)
+
+# Saves the Day 13 tokenizer and BERT models.
+bert_tokenizer.save_pretrained("models/bert_tokenizer")
+bert_sentiment_model.save_pretrained("models/bert_sentiment")
+ticket_model.save_pretrained("models/bert_ticket_router")
